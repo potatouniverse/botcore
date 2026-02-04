@@ -236,7 +236,22 @@ class McpClient {
     const content = (result as { content?: Array<{ type: string; text: string }> })?.content;
     if (content && content.length > 0 && content[0].type === 'text') {
       try {
-        return JSON.parse(content[0].text);
+        const parsed = JSON.parse(content[0].text);
+        // Handle nested result structure from Engram MCP
+        // Format: { content: [...], structuredContent: { result: [...] }, isError: false }
+        if (parsed && typeof parsed === 'object') {
+          // Check if there's a structured result (preferred)
+          if (parsed.structuredContent && Array.isArray(parsed.structuredContent.result)) {
+            return parsed.structuredContent.result;
+          }
+          // Fallback to content array
+          if (Array.isArray(parsed.content)) {
+            return parsed.content;
+          }
+          // Return as-is if neither format matches
+          return parsed;
+        }
+        return parsed;
       } catch (error) {
         // If JSON parsing fails, the content might be an error message
         console.error('[MCP] Failed to parse tool response:', content[0].text);
@@ -484,6 +499,12 @@ export class Memory {
       strength: number;
       age_days: number;
     }>;
+
+    // Validate result is an array
+    if (!Array.isArray(result)) {
+      console.warn('[Memory] Recall returned non-array:', result);
+      return [];
+    }
 
     await this.log({
       timestamp: new Date().toISOString(),
