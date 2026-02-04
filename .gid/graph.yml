@@ -218,3 +218,73 @@ edges:
   - from: example-basic
     to: sdk-typescript
     relation: depends_on
+  
+  # Cloud Sync Feature
+  feat-cloud-sync:
+    type: Feature
+    layer: application
+    status: draft
+    priority: supporting
+    name: "Cloud Memory Sync"
+    description: "HTTP API wrapper + sync module for cross-platform memory sharing. Push/pull/listen with conflict resolution."
+    tasks:
+      - "[ ] Design Memory HTTP API (recall, store, consolidate, stats)"
+      - "[ ] Implement MemorySync class (push/pull/listen)"
+      - "[ ] Add conflict resolution (local/remote/merge)"
+      - "[ ] WebSocket for real-time sync"
+      - "[ ] OpenAPI spec generation"
+      - "[ ] Deploy template (Railway/Fly.io)"
+      - "[ ] Write ChatGPT integration example"
+      
+  comp-http-api:
+    type: Component
+    layer: interface
+    status: draft
+    priority: supporting
+    name: "Memory HTTP API Server"
+    description: "Express/Fastify server wrapping Engram. RESTful endpoints for recall, store, consolidate."
+    
+  comp-sync-engine:
+    type: Component
+    layer: application
+    status: draft
+    priority: supporting
+    name: "Sync Engine"
+    description: "Handle push/pull, incremental sync, conflict resolution, WebSocket real-time."
+    
+  comp-browser-ext:
+    type: Component
+    layer: interface
+    status: draft
+    priority: generic
+    name: "Browser Extension"
+    description: "Chrome/Firefox extension for cross-platform memory bar. Inject into ChatGPT, Claude, etc."
+
+  # Cloud Sync edges
+  - from: feat-cloud-sync
+    to: feat-memory
+    relation: depends_on
+    
+  - from: feat-cloud-sync
+    to: comp-http-api
+    relation: depends_on
+    
+  - from: feat-cloud-sync
+    to: comp-sync-engine
+    relation: depends_on
+    
+  - from: comp-http-api
+    to: comp-memory-engram
+    relation: depends_on
+    
+  - from: comp-sync-engine
+    to: comp-http-api
+    relation: depends_on
+    
+  - from: comp-browser-ext
+    to: comp-http-api
+    relation: depends_on
+    
+  - from: comp-cli
+    to: feat-cloud-sync
+    relation: related_to

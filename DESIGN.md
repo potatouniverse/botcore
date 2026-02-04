@@ -187,6 +187,158 @@ botcore import my-bot.tar.gz --dest ./new-bot
 - **Task Management:** GID (optional integration)
 - **Deployment:** npm package + CLI tool
 
+## Cloud Sync Architecture
+
+### Problem: Cross-Platform Memory Sharing
+
+**Goal:** Use the same memory across ChatGPT, Claude Desktop, Clawdbot, Cursor, etc. without platform cooperation.
+
+### Solution: Three-Layer Approach
+
+#### Layer 1: MCP Server (Already Available)
+**Status:** ✅ Engram is already an MCP server
+
+```
+┌─────────────┐
+│ Claude App  │──┐
+└─────────────┘  │
+                 │    ┌──────────────────┐
+┌─────────────┐  │    │ Engram MCP Server│
+│ Cursor IDE  │──┼────│  (Cloud Hosted)  │
+└─────────────┘  │    └──────────────────┘
+                 │              ▲
+┌─────────────┐  │              │
+│  Clawdbot   │──┘        Shared Memory
+└─────────────┘
+```
+
+**Deployment:**
+- Railway / Fly.io / Render
+- Users configure MCP endpoint in each platform
+- All platforms share one SQLite database
+
+**Platforms Supported:**
+- Claude Desktop
+- Cursor IDE
+- Windsurf
+- Clawdbot
+
+---
+
+#### Layer 2: HTTP API (Universal)
+**Status:** 🏗️ To be implemented in BotCore
+
+Wrap Engram as REST API for platforms without MCP support:
+
+```typescript
+// BotCore Memory API
+GET  /api/v1/memory/recall?q=user+preferences&limit=5
+POST /api/v1/memory/store
+  { "content": "User prefers concise answers", "type": "relational", "importance": 0.8 }
+POST /api/v1/memory/consolidate
+GET  /api/v1/memory/stats
+```
+
+**Integration Methods:**
+
+**A. ChatGPT Custom Instructions**
+```
+System:
+Before answering, recall memories: "[Checking memory...]"
+Use Code Interpreter to call: https://my-bot-memory.api/recall?q=...
+
+After answering, store important info: "[Storing: ...]"
+POST https://my-bot-memory.api/store
+```
+
+**B. GPTs Actions (ChatGPT Plus)**
+Create a GPT with actions configured to call Memory API
+
+**C. Claude Projects**
+Use Project Knowledge with memory connector instructions
+
+**D. Any platform with HTTP support**
+Via webhooks, custom integrations, or API proxies
+
+---
+
+#### Layer 3: Browser Extension (Future)
+**Status:** 📋 Phase 4
+
+Universal memory bar that works with any web-based AI:
+
+```
+┌────────────────────────────────────┐
+│   Browser Extension (Memory Bar)   │
+│  ┌──────────────────────────────┐  │
+│  │ [Recall] [Store] [Settings]  │  │
+│  └──────────────────────────────┘  │
+└────────────────────────────────────┘
+          ▲                ▲
+          │                │
+    ┌─────┴─────┐    ┌────┴─────┐
+    │ ChatGPT   │    │ Claude   │
+    └───────────┘    └──────────┘
+```
+
+**Features:**
+- Auto-detect conversations
+- Suggest relevant memories
+- One-click store
+- Works with ChatGPT, Claude, Gemini, Perplexity, etc.
+
+---
+
+### BotCore Sync Module
+
+```typescript
+// src/core/sync.ts
+export class MemorySync {
+  constructor(public localMemory: Memory, public remoteUrl: string) {}
+  
+  async push(options?: { incremental?: boolean }): Promise<void> {
+    // Push local memory to cloud
+  }
+  
+  async pull(options?: { incremental?: boolean }): Promise<void> {
+    // Pull updates from cloud
+  }
+  
+  async listen(): Promise<void> {
+    // Real-time sync via WebSocket
+  }
+  
+  async resolveConflicts(strategy: 'local' | 'remote' | 'merge'): Promise<void> {
+    // Handle sync conflicts
+  }
+}
+
+// Usage
+const memory = new Memory('./my-bot/memory/engram.db');
+const sync = new MemorySync(memory, 'https://my-memory.cloud/api');
+
+await sync.push({ incremental: true });
+await sync.listen(); // Real-time sync
+```
+
+---
+
+### Deployment Options
+
+#### Option A: Self-Hosted (Free)
+```bash
+# Railway / Fly.io / Render
+botcore serve --port 8080 --memory ./engram.db
+```
+
+#### Option B: BotCore Cloud (Future SaaS)
+```bash
+botcore login
+botcore sync enable --plan free  # 100MB memory, 1k recalls/month
+```
+
+---
+
 ## Roadmap
 
 ### Phase 1: Core (MVP)
@@ -201,15 +353,24 @@ botcore import my-bot.tar.gz --dest ./new-bot
 - [ ] Session format + storage
 - [ ] GID integration (task tracking)
 
-### Phase 3: Platform Adapters
+### Phase 3: Cloud Sync (HTTP API)
+- [ ] Memory HTTP API wrapper
+- [ ] Sync module (push/pull/listen)
+- [ ] Conflict resolution
+- [ ] Deploy to Railway/Fly.io
+- [ ] OpenAPI spec + docs
+- [ ] Example: ChatGPT integration
+
+### Phase 4: Platform Adapters
 - [ ] Clawdbot adapter
 - [ ] Suited Bot adapter
 - [ ] Generic HTTP API adapter
 
-### Phase 4: Cloud Sync (Future)
-- [ ] Remote backup
-- [ ] Multi-device sync
-- [ ] Collaboration (shared bots)
+### Phase 5: Browser Extension (Future)
+- [ ] Chrome/Firefox extension
+- [ ] Auto-detect AI platforms
+- [ ] Memory sidebar UI
+- [ ] Cross-platform memory bar
 
 ## Success Criteria
 
