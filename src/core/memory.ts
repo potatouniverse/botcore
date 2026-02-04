@@ -235,7 +235,13 @@ class McpClient {
     // MCP tools return { content: [{ type: 'text', text: '...' }] }
     const content = (result as { content?: Array<{ type: string; text: string }> })?.content;
     if (content && content.length > 0 && content[0].type === 'text') {
-      return JSON.parse(content[0].text);
+      try {
+        return JSON.parse(content[0].text);
+      } catch (error) {
+        // If JSON parsing fails, the content might be an error message
+        console.error('[MCP] Failed to parse tool response:', content[0].text);
+        throw new Error(`MCP tool ${name} returned invalid JSON: ${content[0].text.substring(0, 100)}`);
+      }
     }
     return result;
   }
@@ -341,6 +347,8 @@ export interface MemoryOptions {
   logDir?: string;
   /** Python command (default: python3) */
   pythonCommand?: string;
+  /** PYTHONPATH for engram module (required if engram not installed globally) */
+  pythonPath?: string;
   /** Whether to auto-start the MCP server */
   autoStart?: boolean;
   /** Whether to log operations to daily files */
@@ -355,6 +363,7 @@ export class Memory {
   public readonly dbPath: string;
   public readonly logDir: string | null;
   public readonly pythonCommand: string;
+  public readonly pythonPath: string | null;
   public readonly enableLogs: boolean;
 
   constructor(options: MemoryOptions | string) {
@@ -366,16 +375,23 @@ export class Memory {
     this.dbPath = options.dbPath;
     this.logDir = options.logDir || null;
     this.pythonCommand = options.pythonCommand || 'python3';
+    this.pythonPath = options.pythonPath || null;
     this.enableLogs = options.enableLogs ?? true;
 
     if (this.logDir && this.enableLogs) {
       this.logManager = new DailyLogManager(this.logDir);
     }
 
-    // Create MCP client
-    this.client = new McpClient(this.pythonCommand, ['-m', 'engram.mcp_server'], {
+    // Create MCP client with PYTHONPATH if provided
+    const env: Record<string, string> = {
       ENGRAM_DB_PATH: this.dbPath,
-    });
+    };
+    
+    if (this.pythonPath) {
+      env.PYTHONPATH = this.pythonPath;
+    }
+    
+    this.client = new McpClient(this.pythonCommand, ['-m', 'engram.mcp_server'], env);
   }
 
   /**
@@ -899,10 +915,11 @@ export class Memory {
  * @param dbPath - Path to the Engram database
  * @param logDir - Optional path to daily log directory
  */
-export function createMemory(dbPath: string, logDir?: string): Memory {
+export function createMemory(dbPath: string, logDir?: string, pythonPath?: string): Memory {
   return new Memory({
     dbPath,
     logDir,
+    pythonPath,
     enableLogs: !!logDir,
   });
 }

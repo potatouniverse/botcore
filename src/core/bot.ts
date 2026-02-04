@@ -9,7 +9,7 @@
  */
 
 import { Identity } from './identity';
-import { Memory, createMemory } from './memory-stub';  // TODO: Fix memory-mcporter
+import { Memory, createMemory } from './memory';  // Using original MCP server approach
 import { Config, createConfig } from './config';
 import { Gid } from './gid';
 import { FileSystemTools, createFileSystemTools } from '../tools/filesystem';
@@ -75,7 +75,13 @@ export async function createBot(options: CreateBotOptions): Promise<Bot> {
   const logDir = (options.memory?.enableLogs ?? true) 
     ? options.memory?.logDir || `${workspace}/memory`
     : undefined;
-  const memory = createMemory(dbPath, logDir);
+  
+  // Try to find PYTHONPATH from environment or use default engram location
+  const pythonPath = process.env.ENGRAM_PYTHONPATH || 
+                     process.env.PYTHONPATH ||
+                     '/Users/potato/clawd/projects/agent-memory-prototype';
+  
+  const memory = createMemory(dbPath, logDir, pythonPath);
   
   // Load config
   const configPath = options.config?.path || `${workspace}/config.yml`;
