@@ -2,16 +2,465 @@
  * Memory module tests
  *
  * Tests the Engram integration and file-based logging.
- * Requires: engram (pip install engramai)
+ * Mocks the MCP server subprocess for testing without Engram installed.
  */
 
 import { Memory, createMemory, MemoryResult, MemoryStats } from '../memory';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { EventEmitter } from 'events';
+import { Readable, Writable } from 'stream';
+
+// ============================================================================
+// Mock MCP Server
+// ============================================================================
+
+// Store memories for cross-test consistency
+const mockMemoryStore = new Map<string, {
+  id: string;
+  content: string;
+  type: string;
+  layer: string;
+  importance: number;
+  strength: number;
+  stability: number;
+  accessCount: number;
+  createdAt: string;
+  lastAccessed: string;
+  pinned: boolean;
+  source: string;
+  tags: string[];
+}>();
+
+let mockRequestId = 0;
+let mockMemoryIdCounter = 0;
+
+function generateMemoryId(): string {
+  return `mem-${++mockMemoryIdCounter}-${Date.now()}`;
+}
+
+function handleMcpRequest(request: {
+  method: string;
+  params?: Record<string, unknown>;
+  id: number;
+}): unknown {
+  const { method, params, id } = request;
+
+  // Handle initialize
+  if (method === 'initialize') {
+    return {
+      jsonrpc: '2.0',
+      id,
+      result: {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'engram-mock', version: '1.0.0' },
+      },
+    };
+  }
+
+  // Handle tools/call
+  if (method === 'tools/call') {
+    const toolName = (params as { name: string })?.name;
+    const toolArgs = (params as { arguments?: Record<string, unknown> })?.arguments || {};
+
+    const result = handleToolCall(toolName, toolArgs);
+    return {
+      jsonrpc: '2.0',
+      id,
+      result: {
+        content: [{ type: 'text', text: JSON.stringify(result) }],
+      },
+    };
+  }
+
+  // Unknown method
+  return {
+    jsonrpc: '2.0',
+    id,
+    error: { code: -32601, message: `Method not found: ${method}` },
+  };
+}
+
+function handleToolCall(toolName: string, args: Record<string, unknown>): unknown {
+  switch (toolName) {
+    case 'store': {
+      const id = generateMemoryId();
+      const content = args.content as string;
+      const type = (args.type as string) || 'factual';
+      const importance = (args.importance as number) || 0.5;
+      const source = (args.source as string) || '';
+      
+      const memory = {
+        id,
+        content,
+        type,
+        layer: importance >= 0.7 ? 'stable' : 'transient',
+        importance,
+        strength: importance,
+        stability: 0.5,
+        accessCount: 0,
+        createdAt: new Date().toISOString(),
+        lastAccessed: new Date().toISOString(),
+        pinned: false,
+        source,
+        tags: [],
+      };
+      mockMemoryStore.set(id, memory);
+      
+      return { id, content, type, layer: memory.layer };
+    }
+
+    case 'recall': {
+      const query = (args.query as string).toLowerCase();
+      const limit = (args.limit as number) || 5;
+      const types = args.types as string[] | undefined;
+      
+      const results: Array<{
+        id: string;
+        content: string;
+        type: string;
+        confidence: number;
+        confidence_label: string;
+        strength: number;
+        age_days: number;
+      }> = [];
+      
+      for (const [, memory] of mockMemoryStore) {
+        // Simple fuzzy match
+        const matchesContent = memory.content.toLowerCase().includes(query) ||
+          query.split(' ').some(word => memory.content.toLowerCase().includes(word));
+        const matchesType = !types || types.includes(memory.type);
+        
+        if (matchesContent && matchesType) {
+          results.push({
+            id: memory.id,
+            content: memory.content,
+            type: memory.type,
+            confidence: 0.8,
+            confidence_label: 'high',
+            strength: memory.strength,
+            age_days: 0,
+          });
+          
+          // Update access count
+          memory.accessCount++;
+          memory.lastAccessed = new Date().toISOString();
+        }
+        
+        if (results.length >= limit) break;
+      }
+      
+      return results;
+    }
+
+    case 'session_recall': {
+      const query = (args.query as string).toLowerCase();
+      const sessionId = (args.session_id as string) || 'default';
+      const limit = (args.limit as number) || 5;
+      
+      // Simulate recall with session tracking
+      const results: Array<{
+        id: string;
+        content: string;
+        type: string;
+        confidence: number;
+        confidence_label: string;
+        strength: number;
+        age_days: number;
+        from_working_memory: boolean;
+      }> = [];
+      
+      for (const [, memory] of mockMemoryStore) {
+        const matchesContent = memory.content.toLowerCase().includes(query) ||
+          query.split(' ').some(word => memory.content.toLowerCase().includes(word));
+        
+        if (matchesContent) {
+          results.push({
+            id: memory.id,
+            content: memory.content,
+            type: memory.type,
+            confidence: 0.8,
+            confidence_label: 'high',
+            strength: memory.strength,
+            age_days: 0,
+            from_working_memory: false,
+          });
+        }
+        
+        if (results.length >= limit) break;
+      }
+      
+      return {
+        results,
+        session_id: sessionId,
+        full_recall_triggered: true,
+        working_memory_size: results.length,
+        reason: 'empty_wm',
+      };
+    }
+
+    case 'consolidate': {
+      return {
+        consolidated: true,
+        stats: {
+          total_memories: mockMemoryStore.size,
+          layers: { stable: Math.floor(mockMemoryStore.size / 2), transient: Math.ceil(mockMemoryStore.size / 2) },
+          pinned: Array.from(mockMemoryStore.values()).filter(m => m.pinned).length,
+        },
+      };
+    }
+
+    case 'stats': {
+      const types: Record<string, number> = {};
+      for (const memory of mockMemoryStore.values()) {
+        types[memory.type] = (types[memory.type] || 0) + 1;
+      }
+      
+      return {
+        total_memories: mockMemoryStore.size,
+        layers: { stable: Math.floor(mockMemoryStore.size / 2), transient: Math.ceil(mockMemoryStore.size / 2) },
+        pinned: Array.from(mockMemoryStore.values()).filter(m => m.pinned).length,
+        types,
+      };
+    }
+
+    case 'get': {
+      const memoryId = args.memory_id as string;
+      const memory = mockMemoryStore.get(memoryId);
+      
+      if (!memory) {
+        return { error: 'Memory not found' };
+      }
+      
+      return {
+        id: memory.id,
+        content: memory.content,
+        type: memory.type,
+        layer: memory.layer,
+        importance: memory.importance,
+        strength: memory.strength,
+        stability: memory.stability,
+        access_count: memory.accessCount,
+        created_at: memory.createdAt,
+        last_accessed: memory.lastAccessed,
+        pinned: memory.pinned,
+        source: memory.source,
+        tags: memory.tags,
+      };
+    }
+
+    case 'pin': {
+      const memoryId = args.memory_id as string;
+      const memory = mockMemoryStore.get(memoryId);
+      
+      if (memory) {
+        memory.pinned = true;
+        return { pinned: true };
+      }
+      return { error: 'Memory not found' };
+    }
+
+    case 'unpin': {
+      const memoryId = args.memory_id as string;
+      const memory = mockMemoryStore.get(memoryId);
+      
+      if (memory) {
+        memory.pinned = false;
+        return { pinned: false };
+      }
+      return { error: 'Memory not found' };
+    }
+
+    case 'reward': {
+      const feedback = (args.feedback as string).toLowerCase();
+      const polarity = feedback.includes('good') || feedback.includes('great') || feedback.includes('job')
+        ? 'positive'
+        : 'negative';
+      
+      return {
+        polarity,
+        confidence: 0.85,
+        affected_memories: args.recent_n || 3,
+      };
+    }
+
+    case 'forget': {
+      const memoryId = args.memory_id as string;
+      const threshold = (args.threshold as number) || 0.01;
+      
+      if (memoryId) {
+        const deleted = mockMemoryStore.delete(memoryId);
+        return {
+          forgotten_count: deleted ? 1 : 0,
+          pruned_ids: deleted ? [memoryId] : [],
+        };
+      }
+      
+      // Prune weak memories
+      const toDelete: string[] = [];
+      for (const [id, memory] of mockMemoryStore) {
+        if (memory.strength < threshold && !memory.pinned) {
+          toDelete.push(id);
+        }
+      }
+      
+      for (const id of toDelete) {
+        mockMemoryStore.delete(id);
+      }
+      
+      return {
+        forgotten_count: toDelete.length,
+        pruned_ids: toDelete,
+      };
+    }
+
+    case 'export': {
+      const exportPath = args.path as string;
+      // Create a mock export file
+      fs.writeFileSync(exportPath, JSON.stringify(Array.from(mockMemoryStore.entries())));
+      const stats = fs.statSync(exportPath);
+      
+      return {
+        exported_to: exportPath,
+        size_bytes: stats.size,
+      };
+    }
+
+    case 'session_status': {
+      const sessionId = (args.session_id as string) || 'default';
+      const activeMemories = Array.from(mockMemoryStore.values())
+        .slice(0, 5)
+        .map(m => ({ id: m.id, content: m.content }));
+      
+      return {
+        session_id: sessionId,
+        size: activeMemories.length,
+        capacity: 7,
+        decay_seconds: 300,
+        active_memory_ids: activeMemories.map(m => m.id),
+        active_memories: activeMemories,
+      };
+    }
+
+    case 'session_clear': {
+      const sessionId = (args.session_id as string) || 'default';
+      return {
+        session_id: sessionId,
+        cleared: true,
+        items_removed: 3,
+      };
+    }
+
+    case 'session_list': {
+      return {
+        sessions: [
+          { session_id: 'default', size: 3 },
+          { session_id: 'test-session', size: 2 },
+        ],
+        total: 2,
+      };
+    }
+
+    case 'hebbian_links': {
+      return {
+        source_id: args.memory_id,
+        links: [],
+        total_links: 0,
+      };
+    }
+
+    default:
+      throw new Error(`Unknown tool: ${toolName}`);
+  }
+}
+
+// Track active mock processes for cleanup
+const activeMockProcesses: Array<{ stdout: Readable; stderr: Readable; stdin: Writable }> = [];
+
+// Mock child_process.spawn
+jest.mock('child_process', () => {
+  const originalModule = jest.requireActual('child_process');
+  const { Readable, Writable } = require('stream');
+  const { EventEmitter } = require('events');
+  
+  return {
+    ...originalModule,
+    spawn: jest.fn((command: string, args: string[], options: unknown) => {
+      // Only mock engram MCP server calls
+      if (args?.includes('-m') && args?.includes('engram.mcp_server')) {
+        // Create a proper readable stream for stdout
+        const mockStdout = new Readable({
+          read() {} // No-op, we push data manually
+        });
+        
+        // Create stderr as well
+        const mockStderr = new Readable({
+          read() {}
+        });
+        
+        // Create stdin as a writable stream
+        const mockStdin = new Writable({
+          write(chunk: Buffer | string, encoding: string, callback: (error?: Error | null) => void) {
+            const data = chunk.toString();
+            // Parse JSON-RPC request and respond
+            try {
+              const request = JSON.parse(data.trim());
+              
+              // Skip notifications (no id)
+              if (request.id === undefined) {
+                callback();
+                return;
+              }
+              
+              const response = handleMcpRequest(request);
+              
+              // Push response to stdout asynchronously
+              setImmediate(() => {
+                mockStdout.push(JSON.stringify(response) + '\n');
+              });
+            } catch (e) {
+              // Ignore parse errors
+            }
+            callback();
+          }
+        });
+        
+        const mockProcess = new EventEmitter();
+        mockProcess.stdout = mockStdout;
+        mockProcess.stderr = mockStderr;
+        mockProcess.stdin = mockStdin;
+        mockProcess.kill = jest.fn(() => {
+          // Properly end the streams
+          if (!mockStdout.destroyed) {
+            mockStdout.push(null); // End the stream
+            mockStdout.destroy();
+          }
+          if (!mockStderr.destroyed) {
+            mockStderr.push(null);
+            mockStderr.destroy();
+          }
+          if (!mockStdin.destroyed) {
+            mockStdin.destroy();
+          }
+          mockProcess.emit('close', 0);
+        });
+        
+        // Track for cleanup
+        activeMockProcesses.push({ stdout: mockStdout, stderr: mockStderr, stdin: mockStdin });
+        
+        return mockProcess;
+      }
+      
+      // Fall back to original for other commands
+      return originalModule.spawn(command, args, options);
+    }),
+  };
+});
 
 // Test configuration
-const TEST_TIMEOUT = 30000; // 30 seconds for MCP operations
+const TEST_TIMEOUT = 10000; // Reduced since we're mocking
 
 describe('Memory', () => {
   let memory: Memory;
@@ -20,6 +469,10 @@ describe('Memory', () => {
   let logDir: string;
 
   beforeAll(async () => {
+    // Reset mock state
+    mockMemoryStore.clear();
+    mockMemoryIdCounter = 0;
+    
     // Create temp directory for tests
     testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'botcore-memory-test-'));
     dbPath = path.join(testDir, 'test-memory.db');
@@ -41,6 +494,14 @@ describe('Memory', () => {
 
     // Clean up test directory
     fs.rmSync(testDir, { recursive: true, force: true });
+    
+    // Clean up any remaining mock streams
+    for (const proc of activeMockProcesses) {
+      if (!proc.stdout.destroyed) proc.stdout.destroy();
+      if (!proc.stderr.destroyed) proc.stderr.destroy();
+      if (!proc.stdin.destroyed) proc.stdin.destroy();
+    }
+    activeMockProcesses.length = 0;
   });
 
   describe('store()', () => {

@@ -12,6 +12,7 @@
     "dev": "tsc --watch",
     "test": "jest",
     "test:memory": "jest --testPathPattern=memory.test.ts --verbose",
+    "test:integration": "jest --testPathPattern=memory.integration.test.ts --verbose --runInBand",
     "lint": "eslint src/**/*.ts",
     "example:memory": "ts-node examples/memory-basic.ts",
     "example:identity": "ts-node examples/identity-basic.ts",
