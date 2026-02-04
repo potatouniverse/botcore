@@ -219,6 +219,7 @@ edges:
     to: sdk-typescript
     relation: depends_on
   
+    
   # Cloud Sync Feature
   feat-cloud-sync:
     type: Feature
@@ -259,6 +260,63 @@ edges:
     priority: generic
     name: "Browser Extension"
     description: "Chrome/Firefox extension for cross-platform memory bar. Inject into ChatGPT, Claude, etc."
+
+edges:
+  - from: feat-memory
+    to: comp-memory-engram
+    relation: depends_on
+    
+  - from: feat-memory
+    to: comp-memory-files
+    relation: depends_on
+    
+  - from: feat-identity
+    to: comp-identity-parser
+    relation: depends_on
+    
+  - from: feat-skills
+    to: comp-skill-loader
+    relation: depends_on
+    
+  - from: feat-export
+    to: feat-memory
+    relation: depends_on
+    
+  - from: feat-export
+    to: feat-identity
+    relation: depends_on
+    
+  - from: feat-export
+    to: feat-skills
+    relation: depends_on
+    
+  - from: feat-export
+    to: feat-config
+    relation: depends_on
+    
+  - from: comp-cli
+    to: feat-export
+    relation: depends_on
+    
+  - from: sdk-typescript
+    to: feat-memory
+    relation: depends_on
+    
+  - from: sdk-typescript
+    to: feat-identity
+    relation: depends_on
+    
+  - from: sdk-typescript
+    to: feat-skills
+    relation: depends_on
+    
+  - from: sdk-typescript
+    to: feat-config
+    relation: depends_on
+    
+  - from: example-basic
+    to: sdk-typescript
+    relation: depends_on
 
   # Cloud Sync edges
   - from: feat-cloud-sync
