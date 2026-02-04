@@ -1,6 +1,12 @@
 // BotCore SDK - Main entry point
+
+// Unified Bot interface (recommended)
+export * from './core/bot';
+
+// Individual modules (for advanced use)
 export * from './core/memory';
 export * from './core/identity';
+export * from './core/gid';
 
 // Re-export config with explicit types to avoid naming conflicts
 export {
