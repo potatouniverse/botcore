@@ -9,7 +9,7 @@ nodes:
   feat-memory:
     type: Feature
     layer: domain
-    status: in_progress
+    status: active
     priority: core
     name: "Memory System"
     description: "Engram (cognitive dynamics) + file-based logs. Hybrid memory with ACT-R activation, Hebbian learning, and consolidation."
@@ -23,16 +23,16 @@ nodes:
   feat-identity:
     type: Feature
     layer: domain
-    status: draft
+    status: active
     priority: core
     name: "Identity Management"
     description: "Load/save SOUL.md, IDENTITY.md, USER.md. Parse and validate identity files."
     tasks:
-      - "[ ] Design Identity class API"
-      - "[ ] Implement Markdown parser for SOUL/IDENTITY/USER"
-      - "[ ] Validate identity schema"
-      - "[ ] Add identity export/import"
-      - "[ ] Write tests"
+      - "[x] Design Identity class API"
+      - "[x] Implement Markdown parser for SOUL/IDENTITY/USER"
+      - "[x] Validate identity schema"
+      - "[x] Add identity export/import"
+      - "[x] Write tests"
       
   feat-skills:
     type: Feature
@@ -76,6 +76,22 @@ nodes:
       - "[ ] Import validation"
       - "[ ] CLI commands (botcore export/import)"
       
+  feat-cloud-sync:
+    type: Feature
+    layer: application
+    status: draft
+    priority: supporting
+    name: "Cloud Memory Sync"
+    description: "HTTP API wrapper + sync module for cross-platform memory sharing. Push/pull/listen with conflict resolution."
+    tasks:
+      - "[ ] Design Memory HTTP API (recall, store, consolidate, stats)"
+      - "[ ] Implement MemorySync class (push/pull/listen)"
+      - "[ ] Add conflict resolution (local/remote/merge)"
+      - "[ ] WebSocket for real-time sync"
+      - "[ ] OpenAPI spec generation"
+      - "[ ] Deploy template (Railway/Fly.io)"
+      - "[ ] Write ChatGPT integration example"
+      
   # Components
   comp-memory-engram:
     type: Component
@@ -96,7 +112,7 @@ nodes:
   comp-identity-parser:
     type: Component
     layer: application
-    status: draft
+    status: active
     priority: core
     name: "Identity File Parser"
     description: "Parse SOUL.md, IDENTITY.md, USER.md into structured data."
@@ -123,6 +139,30 @@ nodes:
       - "[ ] import command"
       - "[ ] sync command (future)"
       
+  comp-http-api:
+    type: Component
+    layer: interface
+    status: draft
+    priority: supporting
+    name: "Memory HTTP API Server"
+    description: "Express/Fastify server wrapping Engram. RESTful endpoints for recall, store, consolidate."
+    
+  comp-sync-engine:
+    type: Component
+    layer: application
+    status: draft
+    priority: supporting
+    name: "Sync Engine"
+    description: "Handle push/pull, incremental sync, conflict resolution, WebSocket real-time."
+    
+  comp-browser-ext:
+    type: Component
+    layer: interface
+    status: draft
+    priority: generic
+    name: "Browser Extension"
+    description: "Chrome/Firefox extension for cross-platform memory bar. Inject into ChatGPT, Claude, etc."
+      
   # SDK
   sdk-typescript:
     type: Interface
@@ -143,7 +183,7 @@ nodes:
     tasks:
       - "[x] Create example/ folder"
       - "[x] Write memory example (examples/memory-basic.ts)"
-      - "[ ] Write simple bot using BotCore (needs Identity)"
+      - "[x] Write identity example (examples/identity-basic.ts)"
       - "[x] Document usage in README"
       
   # Docs
@@ -219,107 +259,7 @@ edges:
   - from: example-basic
     to: sdk-typescript
     relation: depends_on
-  
-    
-  # Cloud Sync Feature
-  feat-cloud-sync:
-    type: Feature
-    layer: application
-    status: draft
-    priority: supporting
-    name: "Cloud Memory Sync"
-    description: "HTTP API wrapper + sync module for cross-platform memory sharing. Push/pull/listen with conflict resolution."
-    tasks:
-      - "[ ] Design Memory HTTP API (recall, store, consolidate, stats)"
-      - "[ ] Implement MemorySync class (push/pull/listen)"
-      - "[ ] Add conflict resolution (local/remote/merge)"
-      - "[ ] WebSocket for real-time sync"
-      - "[ ] OpenAPI spec generation"
-      - "[ ] Deploy template (Railway/Fly.io)"
-      - "[ ] Write ChatGPT integration example"
-      
-  comp-http-api:
-    type: Component
-    layer: interface
-    status: draft
-    priority: supporting
-    name: "Memory HTTP API Server"
-    description: "Express/Fastify server wrapping Engram. RESTful endpoints for recall, store, consolidate."
-    
-  comp-sync-engine:
-    type: Component
-    layer: application
-    status: draft
-    priority: supporting
-    name: "Sync Engine"
-    description: "Handle push/pull, incremental sync, conflict resolution, WebSocket real-time."
-    
-  comp-browser-ext:
-    type: Component
-    layer: interface
-    status: draft
-    priority: generic
-    name: "Browser Extension"
-    description: "Chrome/Firefox extension for cross-platform memory bar. Inject into ChatGPT, Claude, etc."
 
-edges:
-  - from: feat-memory
-    to: comp-memory-engram
-    relation: depends_on
-    
-  - from: feat-memory
-    to: comp-memory-files
-    relation: depends_on
-    
-  - from: feat-identity
-    to: comp-identity-parser
-    relation: depends_on
-    
-  - from: feat-skills
-    to: comp-skill-loader
-    relation: depends_on
-    
-  - from: feat-export
-    to: feat-memory
-    relation: depends_on
-    
-  - from: feat-export
-    to: feat-identity
-    relation: depends_on
-    
-  - from: feat-export
-    to: feat-skills
-    relation: depends_on
-    
-  - from: feat-export
-    to: feat-config
-    relation: depends_on
-    
-  - from: comp-cli
-    to: feat-export
-    relation: depends_on
-    
-  - from: sdk-typescript
-    to: feat-memory
-    relation: depends_on
-    
-  - from: sdk-typescript
-    to: feat-identity
-    relation: depends_on
-    
-  - from: sdk-typescript
-    to: feat-skills
-    relation: depends_on
-    
-  - from: sdk-typescript
-    to: feat-config
-    relation: depends_on
-    
-  - from: example-basic
-    to: sdk-typescript
-    relation: depends_on
-
-  # Cloud Sync edges
   - from: feat-cloud-sync
     to: feat-memory
     relation: depends_on

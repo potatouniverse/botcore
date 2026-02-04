@@ -13,7 +13,10 @@
     "test": "jest",
     "test:memory": "jest --testPathPattern=memory.test.ts --verbose",
     "lint": "eslint src/**/*.ts",
-    "example:memory": "ts-node examples/memory-basic.ts"
+    "example:memory": "ts-node examples/memory-basic.ts",
+    "example:identity": "ts-node examples/identity-basic.ts",
+    "example:config": "ts-node examples/config-basic.ts",
+    "test:config": "jest --testPathPattern=config.test.ts --verbose"
   },
   "keywords": [
     "ai",
@@ -38,7 +41,10 @@
     "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "zod": "^4.3.6"
+  },
   "engines": {
     "node": ">=18.0.0"
   }
