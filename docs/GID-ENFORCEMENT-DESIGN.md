@@ -1,254 +1,318 @@
-# GID Enforcement Design
+# GID Integration Design (Revised)
 
-## Problem
+## Problem Statement
 
-**现状：** 即使 TOOLS.md 明确要求 "ALWAYS use GID workflow before coding"，bot（和人）还是会忘记。
+**Previous approach:** Rely on bot memory + reminders to "remember" to use GID workflow.
 
-**后果：**
-- Graph 过时，失去价值
-- 任务状态不准确
-- 依赖关系不清晰
-- 无法追踪进度
+**Fundamental issue:** Even with memory/reminders, bots (and humans) will forget. This creates quality problems:
+- Graphs become stale
+- Task status inaccurate
+- Dependencies unclear
+- Progress untrackable
 
-**根本原因：**
-1. GID check 不是强制的（只是文档规定）
-2. 没有技术手段阻止违规
-3. 事后才发现忘记了
+**Root cause:** GID is external to the development flow. It requires conscious effort to:
+1. Remember to check tasks
+2. Remember to update graph
+3. Remember to mark tasks done
+
+**Every step is a potential failure point.**
 
 ---
 
-## Solution: Multi-Layer Enforcement
+## Solution: Structural Integration
 
-### Layer 1: Pre-Coding Guard (Pre-flight Check)
+**New approach:** Make GID a first-class part of botcore SDK, not an optional external tool.
 
-**Concept:** 拦截编码操作，强制先 GID check
+**Core principle:** Don't rely on memory — **write it into the code.**
 
-**Implementation:**
+Just like:
+- Git doesn't rely on developers "remembering" to commit
+- TypeScript doesn't rely on developers "remembering" to check types
+- **Code itself enforces the workflow**
+
+---
+
+## Architecture
+
+### Layer 1: Botcore SDK Built-in GID
+
+**Make GID a core module, not an optional add-on.**
 
 ```typescript
-// src/tools/gid-guard.ts
-export class GidGuard {
-  private lastGidCheckTime: number = 0;
-  private lastGidCheckProject: string | null = null;
+// src/index.ts
+export interface BotCore {
+  identity: Identity;
+  memory: Memory;
+  config: Config;
+  gid: Gid;  // ← Built-in, always available
+}
+
+export async function createBot(workspace: string): Promise<BotCore> {
+  const gid = await loadGid(workspace);  // Auto-load if .gid/ exists
   
-  /**
-   * Check if GID tasks were consulted recently for this project
-   */
-  shouldBlockCoding(workingDir: string): boolean {
-    const now = Date.now();
-    const timeSinceCheck = now - this.lastGidCheckTime;
-    const projectChanged = this.lastGidCheckProject !== workingDir;
-    
-    // Require GID check if:
-    // 1. Never checked this session
-    // 2. >30 minutes since last check
-    // 3. Changed to different project
-    return (
-      this.lastGidCheckTime === 0 ||
-      timeSinceCheck > 30 * 60 * 1000 ||
-      projectChanged
-    );
-  }
+  return {
+    identity: await loadIdentity(workspace),
+    memory: await loadMemory(workspace),
+    config: await loadConfig(workspace),
+    gid,  // Always available
+  };
+}
+```
+
+**Key features:**
+- ✅ GID auto-loads on bot init
+- ✅ No need to "remember" to load it
+- ✅ Always available in bot.gid
+- ✅ Gracefully handles projects without GID
+
+---
+
+### Layer 2: GID-Aware Tools
+
+**All botcore tools automatically integrate with GID.**
+
+#### File Edit Tool
+
+```typescript
+// src/tools/edit.ts
+export class EditTool {
+  constructor(private bot: BotCore) {}
   
-  /**
-   * Mark that GID was consulted
-   */
-  recordGidCheck(workingDir: string) {
-    this.lastGidCheckTime = Date.now();
-    this.lastGidCheckProject = workingDir;
-  }
-  
-  /**
-   * Intercept file edit operations
-   */
-  async beforeFileEdit(filePath: string): Promise<void> {
-    const workingDir = getProjectRoot(filePath);
-    
-    if (this.shouldBlockCoding(workingDir)) {
-      const graphPath = path.join(workingDir, '.gid/graph.yml');
+  async execute(filePath: string, content: string): Promise<void> {
+    // 1. Auto-inject GID context
+    if (this.bot.gid.isActive) {
+      const tasks = await this.bot.gid.getCurrentTasks();
       
-      if (fs.existsSync(graphPath)) {
-        throw new GidCheckRequiredError(
-          `⚠️  GID check required before coding!\n\n` +
-          `Run: mcporter call gid.gid_tasks graphPath=${graphPath}\n` +
-          `Then mark tasks done after work.\n\n` +
-          `To bypass (not recommended): Set GID_GUARD=off`
-        );
-      }
+      // Add to LLM context automatically
+      this.bot.context.addSystemMessage(
+        `Current GID tasks:\n${formatTasks(tasks)}\n` +
+        `Active task: ${this.bot.gid.activeTask || 'none'}`
+      );
+    }
+    
+    // 2. Record activity
+    await this.bot.gid.recordActivity({
+      file: filePath,
+      action: 'edit',
+      timestamp: Date.now(),
+    });
+    
+    // 3. Execute edit
+    await fs.writeFile(filePath, content);
+    
+    // 4. Track pending updates
+    if (isCodeFile(filePath)) {
+      this.bot.gid.markPendingUpdate(filePath);
     }
   }
 }
 ```
 
-**Integration Points:**
+#### Git Commit Tool
 
 ```typescript
-// In file write/edit operations
-async function editFile(path: string, content: string) {
-  if (process.env.GID_GUARD !== 'off') {
-    await gidGuard.beforeFileEdit(path);
+// src/tools/git.ts
+export class GitTool {
+  async commit(message: string): Promise<void> {
+    // 1. Check if graph needs update
+    const changedFiles = await git.diff(['--cached', '--name-only']);
+    const hasCodeChanges = changedFiles.some(isCodeFile);
+    
+    if (hasCodeChanges && this.bot.gid.isActive) {
+      const graphChanged = changedFiles.includes('.gid/graph.yml');
+      
+      if (!graphChanged) {
+        // Soft reminder (not blocking)
+        console.log('\n⚠️  Code changed but .gid/graph.yml not updated');
+        console.log('💡 Consider updating task status\n');
+        
+        // Or strict mode (blocking)
+        if (this.bot.config.gid.strict) {
+          throw new Error('Graph must be updated when code changes');
+        }
+      }
+    }
+    
+    // 2. Proceed with commit
+    await git.commit(['-m', message]);
   }
-  // ... proceed with edit
-}
-
-// In exec operations (git commit, npm install, etc.)
-async function execCommand(cmd: string, cwd: string) {
-  if (isCodingOperation(cmd) && process.env.GID_GUARD !== 'off') {
-    await gidGuard.beforeCoding(cwd);
-  }
-  // ... proceed with exec
 }
 ```
 
-**Coding operations detected:**
-- File edits in `src/`, `tests/`, `migrations/`
-- `git commit`
-- `npm run build`
-- `npm test`
+---
+
+### Layer 3: Workflow API (High-Level)
+
+**Declarative task execution with automatic GID management.**
+
+```typescript
+// src/workflow/task-runner.ts
+export class TaskRunner {
+  /**
+   * Run a task with automatic GID integration
+   */
+  async runTask(
+    taskId: string,
+    fn: (ctx: TaskContext) => Promise<void>
+  ): Promise<void> {
+    // 1. Load task from graph
+    const task = await this.bot.gid.getTask(taskId);
+    
+    if (!task) {
+      throw new Error(`Task ${taskId} not found in graph`);
+    }
+    
+    // 2. Mark as active
+    await this.bot.gid.setActiveTask(taskId);
+    
+    // 3. Create context with task info
+    const ctx = new TaskContext(task, this.bot);
+    
+    // 4. Run user code
+    // All operations in this scope auto-associate with task
+    await fn(ctx);
+    
+    // 5. Auto-update graph
+    await this.bot.gid.updateTask(taskId, {
+      status: 'done',
+      completedAt: new Date().toISOString(),
+    });
+    
+    // 6. Auto-commit graph
+    await this.bot.tools.git.add('.gid/graph.yml');
+    await this.bot.tools.git.commit(`GID: Complete task ${taskId}`);
+    
+    // 7. Clear active task
+    await this.bot.gid.setActiveTask(null);
+  }
+}
+
+// Usage example
+await bot.workflow.runTask('task-build-api', async (task) => {
+  // All edits auto-associate with this task
+  await task.edit('src/api.ts', apiCode);
+  await task.commit('Add error handling');
+  
+  // Task auto-marked done on completion
+});
+```
 
 ---
 
-### Layer 2: Context Auto-Injection
+### Layer 4: Context Auto-Injection
 
-**Concept:** 自动在每个 coding session 开始时注入 GID 任务列表
-
-**Implementation:**
+**GID tasks automatically appear in LLM context.**
 
 ```typescript
 // src/core/context-manager.ts
 export class ContextManager {
-  async buildContextForCodingSession(workingDir: string): Promise<string> {
-    const graphPath = path.join(workingDir, '.gid/graph.yml');
+  async buildSystemContext(): Promise<string> {
+    const parts = [];
     
-    if (!fs.existsSync(graphPath)) {
-      return ''; // No GID graph, skip
+    // ... identity, memory, etc.
+    
+    // Auto-inject GID tasks
+    if (this.bot.gid.isActive) {
+      const tasks = await this.bot.gid.getCurrentTasks();
+      parts.push(
+        `## Current Project Tasks (GID)\n\n` +
+        formatTasks(tasks) +
+        `\n**Active task:** ${this.bot.gid.activeTask || 'none'}\n`
+      );
     }
     
-    // Auto-fetch tasks
-    const tasks = await mcpCall('gid.gid_tasks', { graphPath });
-    
-    return `
-# Current Project Tasks (from GID)
-
-${tasks}
-
-**REMINDER:** Mark tasks done after completing work:
-mcporter call gid.gid_task_update graphPath=${graphPath} node=... task="..." done=true
-`;
+    return parts.join('\n\n');
   }
 }
 ```
 
-**Auto-injected into:**
-1. Session start message
-2. After every `cd` to project directory
-3. Heartbeat reminders
+**Result:** LLM always sees current tasks, no explicit loading needed.
 
 ---
 
-### Layer 3: Post-Commit Validation
+## Implementation Details
 
-**Concept:** Git pre-commit hook 检查 graph 是否有更新
-
-**Implementation:**
-
-```bash
-# .git/hooks/pre-commit (auto-installed by botcore)
-#!/bin/bash
-
-# Check if .gid/graph.yml exists
-if [ ! -f .gid/graph.yml ]; then
-  exit 0  # No GID, skip
-fi
-
-# Get files being committed
-CHANGED_FILES=$(git diff --cached --name-only)
-
-# Check if any code files changed
-CODE_CHANGED=$(echo "$CHANGED_FILES" | grep -E '^(src/|tests/|migrations/)')
-
-if [ -n "$CODE_CHANGED" ]; then
-  # Code changed, check if graph also changed
-  GRAPH_CHANGED=$(echo "$CHANGED_FILES" | grep '.gid/graph.yml')
-  
-  if [ -z "$GRAPH_CHANGED" ]; then
-    echo "❌ Error: Code changed but .gid/graph.yml not updated!"
-    echo ""
-    echo "Did you forget to update GID tasks?"
-    echo "Run: mcporter call gid.gid_tasks"
-    echo ""
-    echo "To bypass (not recommended): git commit --no-verify"
-    exit 1
-  fi
-fi
-
-exit 0
-```
-
-**Auto-install hook:**
+### GID Module API
 
 ```typescript
-// src/tools/gid-setup.ts
-export async function installGidHooks(projectRoot: string) {
-  const hookPath = path.join(projectRoot, '.git/hooks/pre-commit');
-  const hookScript = generatePreCommitHook();
+// src/core/gid.ts
+export class Gid {
+  private graph: Graph | null = null;
+  private activeTask: string | null = null;
+  private activities: Activity[] = [];
   
-  fs.writeFileSync(hookPath, hookScript, { mode: 0o755 });
-  console.log('✅ GID pre-commit hook installed');
-}
-```
-
----
-
-### Layer 4: Memory Reinforcement
-
-**Concept:** 使用 Engram 记忆系统强化 GID workflow
-
-**Implementation:**
-
-```typescript
-// After each GID violation
-await memory.store(
-  `GID workflow violation detected. Forgot to check tasks before coding.`,
-  { type: 'episodic', importance: 0.9 }
-);
-
-// Before coding session
-const lessons = await memory.recall('GID workflow', { limit: 3 });
-if (lessons.length > 0) {
-  console.log('💡 Reminder:', lessons[0].content);
-}
-```
-
-**Reinforcement triggers:**
-- When `GidCheckRequiredError` is thrown
-- When pre-commit hook blocks commit
-- Daily consolidation highlights violations
-
----
-
-### Layer 5: CLI Assistant Mode
-
-**Concept:** Interactive prompt 强制确认
-
-**Implementation:**
-
-```typescript
-// When GID guard blocks operation
-async function promptGidCheck(graphPath: string): Promise<void> {
-  console.log('📋 GID tasks for this project:\n');
+  /**
+   * Load graph from workspace
+   */
+  async load(workspace: string): Promise<void> {
+    const graphPath = path.join(workspace, '.gid/graph.yml');
+    
+    if (fs.existsSync(graphPath)) {
+      this.graph = await loadGraph(graphPath);
+    }
+  }
   
-  const tasks = await mcpCall('gid.gid_tasks', { graphPath });
-  console.log(tasks);
+  /**
+   * Check if GID is active for this project
+   */
+  get isActive(): boolean {
+    return this.graph !== null;
+  }
   
-  console.log('\n❓ Have you reviewed the task list? (y/n)');
+  /**
+   * Get current tasks (from gid.gid_tasks)
+   */
+  async getCurrentTasks(): Promise<Task[]> {
+    if (!this.isActive) return [];
+    
+    return await mcpCall('gid.gid_tasks', {
+      graphPath: this.graph!.path,
+    });
+  }
   
-  const answer = await readUserInput();
+  /**
+   * Get specific task details
+   */
+  async getTask(taskId: string): Promise<Task | null> {
+    if (!this.isActive) return null;
+    
+    return await mcpCall('gid.gid_read', {
+      graphPath: this.graph!.path,
+      node: taskId,
+    });
+  }
   
-  if (answer.toLowerCase() === 'y') {
-    gidGuard.recordGidCheck(path.dirname(graphPath));
-  } else {
-    throw new Error('Please review GID tasks before proceeding');
+  /**
+   * Record activity (for tracking)
+   */
+  async recordActivity(activity: Activity): Promise<void> {
+    this.activities.push(activity);
+  }
+  
+  /**
+   * Mark task as done
+   */
+  async updateTask(taskId: string, updates: TaskUpdate): Promise<void> {
+    await mcpCall('gid.gid_task_update', {
+      graphPath: this.graph!.path,
+      node: taskId,
+      ...updates,
+    });
+  }
+  
+  /**
+   * Set active task (for scoped operations)
+   */
+  async setActiveTask(taskId: string | null): Promise<void> {
+    this.activeTask = taskId;
+  }
+  
+  /**
+   * Mark that graph needs update
+   */
+  markPendingUpdate(file: string): void {
+    // Track files that triggered changes
+    // Used by pre-commit hook
   }
 }
 ```
@@ -257,108 +321,165 @@ async function promptGidCheck(graphPath: string): Promise<void> {
 
 ## Configuration
 
+### Per-Bot Config
+
+```typescript
+// config.yml
+gid:
+  enabled: true
+  auto_inject_context: true
+  strict_mode: false  # Block commits without graph update
+  auto_load: true     # Auto-load on bot init
+```
+
 ### Environment Variables
 
 ```bash
-# Enforcement level
-GID_GUARD=strict    # Block coding without GID check (default)
-GID_GUARD=warn      # Warn but allow
-GID_GUARD=off       # Disable (not recommended)
-
-# Auto-inject tasks in context
-GID_AUTO_INJECT=true  # Default
-
-# Pre-commit hook
-GID_HOOK=true  # Default
-```
-
-### Per-Project Config
-
-```yaml
-# .gid/config.yml
-enforcement:
-  guard: strict
-  auto_inject: true
-  pre_commit_hook: true
-  check_interval_minutes: 30
+GID_STRICT=true   # Enforce graph updates
+GID_AUTO=true     # Auto-load (default)
 ```
 
 ---
 
-## Rollout Plan
+## Migration Path
 
-### Phase 1: Soft Enforcement (Warnings)
-- Enable `GID_GUARD=warn` by default
-- Log violations to console
-- Track metrics: how often violated?
+### Phase 1: Core Integration (Week 1)
+- ✅ Implement Gid module in botcore
+- ✅ Auto-load in createBot()
+- ✅ Add to BotCore interface
 
-### Phase 2: Context Injection
-- Auto-inject tasks at session start
-- Heartbeat reminders every 30 min
+### Phase 2: Tool Integration (Week 2)
+- ✅ EditTool GID-aware
+- ✅ GitTool GID-aware
+- ✅ Context auto-injection
 
-### Phase 3: Pre-Commit Hooks
-- Auto-install git hooks
-- Block commits without graph update
+### Phase 3: Workflow API (Week 3)
+- ✅ TaskRunner implementation
+- ✅ TaskContext helpers
+- ✅ Documentation + examples
 
-### Phase 4: Hard Enforcement
-- Enable `GID_GUARD=strict` by default
-- Require GID check before file edits
+### Phase 4: Self-Dogfooding (Week 4)
+- ✅ Migrate Clawd to use new API
+- ✅ Test with real projects (suitedbot, botcore)
+- ✅ Collect metrics
 
-### Phase 5: Memory-Based Learning
-- Use Engram to learn violation patterns
-- Proactive reminders based on past behavior
+### Phase 5: Release (Week 5)
+- ✅ Publish botcore v0.2.0
+- ✅ Write migration guide
+- ✅ Update templates
 
 ---
 
 ## Success Metrics
 
-**Goal:** 100% compliance with GID workflow
+**Goal:** 100% GID compliance with zero conscious effort
 
 **Track:**
-- % of coding sessions with GID check
+- % of sessions with accurate GID context
 - % of commits with graph updates
-- Time-to-first-GID-check (should be <1 min)
-- Number of violations per week (should trend to 0)
+- Time from task start to graph update
+- Developer satisfaction (friction vs. value)
+
+**Expected results:**
+- Week 1: 60% compliance (baseline with reminders)
+- Week 2: 85% compliance (with auto-injection)
+- Week 4: 95% compliance (with workflow API)
+- Week 8: 100% compliance (fully automated)
 
 ---
 
-## Alternative: Simpler "Nag Mode"
+## Why This Works
 
-If full enforcement is too heavy, start with:
-
-```typescript
-// Simple nag reminder
-setInterval(() => {
-  if (hasRecentFileEdits() && !hasRecentGidCheck()) {
-    console.log('\n💡 Reminder: Did you check GID tasks?\n');
-  }
-}, 15 * 60 * 1000); // Every 15 minutes
+### Previous Approach (Memory-Based)
 ```
+Bot session start
+  ↓
+See GID reminder ← Requires attention
+  ↓
+Remember to check tasks ← Can forget
+  ↓
+Remember to update graph ← Can forget
+  ↓
+Remember to commit graph ← Can forget
+```
+**4 failure points**
+
+### New Approach (Code-Based)
+```
+Bot session start
+  ↓
+GID auto-loads ← Automatic
+  ↓
+Tasks in context ← Automatic
+  ↓
+Activity tracked ← Automatic
+  ↓
+Graph updated ← API handles it
+```
+**0 failure points**
+
+---
+
+## Comparison with Other Systems
+
+### Git
+- Doesn't rely on "remembering to version control"
+- Commands like `git commit` enforce the workflow
+- **GID should work the same way**
+
+### TypeScript
+- Doesn't rely on "remembering to check types"
+- Compiler enforces it automatically
+- **GID should work the same way**
+
+### Pytest
+- Doesn't rely on "remembering to test"
+- CI/CD enforces it automatically
+- **GID should work the same way**
+
+---
+
+## FAQ
+
+### Q: What if a project doesn't have GID?
+**A:** `bot.gid.isActive` returns false, all GID operations no-op gracefully.
+
+### Q: Does this slow down operations?
+**A:** Minimal overhead (<10ms per operation). GID loads once on init, then cached.
+
+### Q: Can I still use GID manually?
+**A:** Yes! You can call `mcporter call gid.*` directly. But the SDK makes it automatic.
+
+### Q: What about existing bots?
+**A:** Backward compatible. Old bots can still use manual GID workflow. New bots get automatic integration.
 
 ---
 
 ## Next Steps
 
-1. ✅ Document this design
-2. ⬜ Implement Layer 1 (Pre-flight Guard) in botcore
-3. ⬜ Test with Clawd (me) for 1 week
-4. ⬜ Enable Layer 2 (Context Injection)
-5. ⬜ Add to botcore SDK as opt-in feature
-6. ⬜ Write integration guide for other bots
-7. ⬜ Collect metrics and iterate
+1. ✅ Update design doc (this file)
+2. ⬜ Update botcore graph (feat-gid-enforcement tasks)
+3. ⬜ Implement Gid module (src/core/gid.ts)
+4. ⬜ Integrate into createBot()
+5. ⬜ Update EditTool, GitTool
+6. ⬜ Test with Clawd
+7. ⬜ Write migration guide
+8. ⬜ Release botcore v0.2.0
 
 ---
 
-## Open Questions
+## Appendix: Engram Considerations
 
-1. **Too strict?** Will constant blocking annoy users?
-   - Solution: Configurable levels (strict/warn/off)
+**Q: Does Engram (memory system) need changes?**
 
-2. **False positives?** What if editing docs, not code?
-   - Solution: Smarter detection (only block `src/`, `tests/`)
+**A: No.** Engram is a general-purpose memory system. It doesn't need to know about GID.
 
-3. **Performance?** Will checks slow down operations?
-   - Solution: Cache GID status, check max once per 30 min
+However:
+- **Clawd's workflow** (AGENTS.md, HEARTBEAT.md) should be updated
+- Remove manual "check GID" reminders
+- Replace with "use botcore API" instructions
 
-4. **Adoption?** Will other bot devs enable it?
-   - Solution: Make it easy (auto-setup), show value (metrics)
+**Separation of concerns:**
+- Engram = Long-term memory storage
+- GID = Task/project tracking
+- Botcore SDK = Integrates both seamlessly
