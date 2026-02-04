@@ -1,0 +1,220 @@
+domain: botcore
+version: "1.0"
+metadata:
+  created: "2026-02-04"
+  description: "Portable AI agent core with memory, identity, skills, and task management"
+  
+nodes:
+  # Core Features
+  feat-memory:
+    type: Feature
+    layer: domain
+    status: draft
+    priority: core
+    name: "Memory System"
+    description: "Engram (cognitive dynamics) + file-based logs. Hybrid memory with ACT-R activation, Hebbian learning, and consolidation."
+    tasks:
+      - "[ ] Design Memory class API"
+      - "[ ] Integrate Engram MCP/Python client"
+      - "[ ] Implement file-based log sync"
+      - "[ ] Add export/import for memory.db"
+      - "[ ] Write tests for recall/store"
+      
+  feat-identity:
+    type: Feature
+    layer: domain
+    status: draft
+    priority: core
+    name: "Identity Management"
+    description: "Load/save SOUL.md, IDENTITY.md, USER.md. Parse and validate identity files."
+    tasks:
+      - "[ ] Design Identity class API"
+      - "[ ] Implement Markdown parser for SOUL/IDENTITY/USER"
+      - "[ ] Validate identity schema"
+      - "[ ] Add identity export/import"
+      - "[ ] Write tests"
+      
+  feat-skills:
+    type: Feature
+    layer: domain
+    status: draft
+    priority: supporting
+    name: "Skills Registry"
+    description: "Skill loader, registry, and metadata management. Support MCP, native, and HTTP skills."
+    tasks:
+      - "[ ] Design Skills class API"
+      - "[ ] Implement skill discovery (SKILL.md)"
+      - "[ ] Skill loader (MCP/native/HTTP)"
+      - "[ ] Skill metadata validation"
+      - "[ ] Write tests"
+      
+  feat-config:
+    type: Feature
+    layer: domain
+    status: draft
+    priority: supporting
+    name: "Configuration Management"
+    description: "Model preferences, permissions, platform hints. Schema validation."
+    tasks:
+      - "[ ] Design Config class API"
+      - "[ ] Define JSON schema"
+      - "[ ] Implement load/save/validate"
+      - "[ ] Add config export/import"
+      - "[ ] Write tests"
+      
+  feat-export:
+    type: Feature
+    layer: application
+    status: draft
+    priority: core
+    name: "Export/Import Tools"
+    description: "Package bot into portable archive (tar.gz). Rewrite paths on import."
+    tasks:
+      - "[ ] Design export format (BotCorePackage)"
+      - "[ ] Implement tar.gz creation"
+      - "[ ] Path rewriting engine"
+      - "[ ] Import validation"
+      - "[ ] CLI commands (botcore export/import)"
+      
+  # Components
+  comp-memory-engram:
+    type: Component
+    layer: infrastructure
+    status: draft
+    priority: core
+    name: "Engram Wrapper"
+    description: "TypeScript wrapper for Engram Python MCP server. Handle subprocess, IPC."
+    
+  comp-memory-files:
+    type: Component
+    layer: infrastructure
+    status: draft
+    priority: supporting
+    name: "File-based Memory"
+    description: "Sync memory/YYYY-MM-DD.md files. Markdown parsing and generation."
+    
+  comp-identity-parser:
+    type: Component
+    layer: application
+    status: draft
+    priority: core
+    name: "Identity File Parser"
+    description: "Parse SOUL.md, IDENTITY.md, USER.md into structured data."
+    
+  comp-skill-loader:
+    type: Component
+    layer: application
+    status: draft
+    priority: supporting
+    name: "Skill Loader"
+    description: "Load skills from directory, parse SKILL.md metadata."
+    
+  comp-cli:
+    type: Component
+    layer: interface
+    status: draft
+    priority: core
+    name: "CLI Tool"
+    description: "Command-line interface: botcore init/export/import/sync."
+    tasks:
+      - "[ ] CLI framework setup (yargs/commander)"
+      - "[ ] init command"
+      - "[ ] export command"
+      - "[ ] import command"
+      - "[ ] sync command (future)"
+      
+  # SDK
+  sdk-typescript:
+    type: Interface
+    layer: interface
+    status: draft
+    priority: core
+    name: "TypeScript SDK"
+    description: "Public API for BotCore. Exported from src/index.ts."
+    
+  # Examples
+  example-basic:
+    type: Component
+    layer: interface
+    status: draft
+    priority: supporting
+    name: "Basic Bot Example"
+    description: "Minimal example showing Memory + Identity usage."
+    tasks:
+      - "[ ] Create example/ folder"
+      - "[ ] Write simple bot using BotCore"
+      - "[ ] Document usage in README"
+      
+  # Docs
+  doc-architecture:
+    type: File
+    layer: interface
+    status: draft
+    priority: supporting
+    name: "Architecture Documentation"
+    description: "docs/ARCHITECTURE.md with detailed design."
+    
+  doc-migration:
+    type: File
+    layer: interface
+    status: draft
+    priority: supporting
+    name: "Migration Guide"
+    description: "docs/MIGRATION.md for moving bots between platforms."
+
+edges:
+  - from: feat-memory
+    to: comp-memory-engram
+    relation: depends_on
+    
+  - from: feat-memory
+    to: comp-memory-files
+    relation: depends_on
+    
+  - from: feat-identity
+    to: comp-identity-parser
+    relation: depends_on
+    
+  - from: feat-skills
+    to: comp-skill-loader
+    relation: depends_on
+    
+  - from: feat-export
+    to: feat-memory
+    relation: depends_on
+    
+  - from: feat-export
+    to: feat-identity
+    relation: depends_on
+    
+  - from: feat-export
+    to: feat-skills
+    relation: depends_on
+    
+  - from: feat-export
+    to: feat-config
+    relation: depends_on
+    
+  - from: comp-cli
+    to: feat-export
+    relation: depends_on
+    
+  - from: sdk-typescript
+    to: feat-memory
+    relation: depends_on
+    
+  - from: sdk-typescript
+    to: feat-identity
+    relation: depends_on
+    
+  - from: sdk-typescript
+    to: feat-skills
+    relation: depends_on
+    
+  - from: sdk-typescript
+    to: feat-config
+    relation: depends_on
+    
+  - from: example-basic
+    to: sdk-typescript
+    relation: depends_on
