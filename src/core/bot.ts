@@ -12,12 +12,16 @@ import { Identity, createIdentity } from './identity';
 import { Memory, createMemory } from './memory';
 import { Config, createConfig } from './config';
 import { Gid } from './gid';
+import { FileSystemTools, createFileSystemTools } from '../tools/filesystem';
 
 export interface Bot {
   identity: Identity;
   memory: Memory;
   config: Config;
   gid: Gid;
+  tools: {
+    fs: FileSystemTools;
+  };
   
   /** Workspace root directory */
   workspace: string;
@@ -81,6 +85,9 @@ export async function createBot(options: CreateBotOptions): Promise<Bot> {
   const gid = new Gid();
   await gid.load(workspace);
   
+  // Create filesystem tools with GID tracking
+  const fs = createFileSystemTools({ gid, workspace });
+  
   // Display GID summary at session start (minimal Strategy 2)
   if (displayGidSummary && gid.isActive) {
     const summary = await gid.getTaskSummary();
@@ -92,6 +99,7 @@ export async function createBot(options: CreateBotOptions): Promise<Bot> {
     memory,
     config,
     gid,
+    tools: { fs },
     workspace,
   };
 }

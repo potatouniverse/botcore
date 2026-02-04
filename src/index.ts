@@ -31,6 +31,9 @@ export {
 
 export * from './core/skills';
 
+// Filesystem tools with GID tracking
+export * from './tools/filesystem';
+
 // CLI tools - selective exports to avoid naming conflicts
 export {
   exportBot,

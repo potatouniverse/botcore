@@ -216,13 +216,24 @@ export class Gid {
    * Check if file should be tracked
    */
   private isCodeFile(file: string): boolean {
-    const codeExtensions = ['.ts', '.js', '.tsx', '.jsx', '.py', '.rs', '.go'];
-    const codeDirs = ['src/', 'tests/', 'lib/', 'migrations/'];
+    const codeExtensions = ['.ts', '.js', '.tsx', '.jsx', '.py', '.rs', '.go', '.java', '.c', '.cpp', '.h'];
+    const codeDirs = ['src/', 'tests/', 'lib/', 'migrations/', 'test/', '__tests__/'];
     
     const ext = path.extname(file);
-    const dir = file.split('/')[0];
     
-    return codeExtensions.includes(ext) || codeDirs.includes(dir + '/');
+    // Check extension first
+    if (codeExtensions.includes(ext)) {
+      return true;
+    }
+    
+    // Check if file is in a code directory
+    for (const dir of codeDirs) {
+      if (file.startsWith(dir) || file.includes(`/${dir}`)) {
+        return true;
+      }
+    }
+    
+    return false;
   }
   
   /**
@@ -230,6 +241,13 @@ export class Gid {
    */
   getRecentActivities(): Activity[] {
     return [...this.activities];
+  }
+  
+  /**
+   * Clear all activities (for testing)
+   */
+  clearActivities(): void {
+    this.activities = [];
   }
   
   /**
