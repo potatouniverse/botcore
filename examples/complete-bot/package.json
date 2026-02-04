@@ -1,0 +1,14 @@
+{
+  "name": "botcore-example",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx main.ts"
+  },
+  "dependencies": {
+    "botcore": "file:../.."
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0"
+  }
+}

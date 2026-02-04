@@ -1,0 +1,14 @@
+domain: example-bot
+nodes:
+  - id: feat-testing
+    type: Feature
+    name: Test BotCore Features
+    description: Verify all BotCore modules work correctly
+    status: in_progress
+    tasks:
+      - "[x] Create example project"
+      - "[ ] Test Identity loading"
+      - "[ ] Test Memory operations"
+      - "[ ] Test GID integration"
+      - "[ ] Test FileSystemTools"
+edges: []

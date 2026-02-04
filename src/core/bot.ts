@@ -8,7 +8,7 @@
  * - GID
  */
 
-import { Identity, createIdentity } from './identity';
+import { Identity } from './identity';
 import { Memory, createMemory } from './memory';
 import { Config, createConfig } from './config';
 import { Gid } from './gid';
@@ -67,15 +67,15 @@ export async function createBot(options: CreateBotOptions): Promise<Bot> {
   const { workspace, displayGidSummary = true } = options;
   
   // Load identity
-  const identity = await createIdentity(workspace);
+  const identity = new Identity(workspace);
+  await identity.load();
   
   // Load memory
-  const memoryOptions = {
-    dbPath: options.memory?.dbPath || `${workspace}/engram.db`,
-    logDir: options.memory?.logDir || `${workspace}/memory`,
-    enableLogs: options.memory?.enableLogs ?? true,
-  };
-  const memory = createMemory(memoryOptions);
+  const dbPath = options.memory?.dbPath || `${workspace}/engram.db`;
+  const logDir = (options.memory?.enableLogs ?? true) 
+    ? options.memory?.logDir || `${workspace}/memory`
+    : undefined;
+  const memory = createMemory(dbPath, logDir);
   
   // Load config
   const configPath = options.config?.path || `${workspace}/config.yml`;
@@ -90,8 +90,12 @@ export async function createBot(options: CreateBotOptions): Promise<Bot> {
   
   // Display GID summary at session start (minimal Strategy 2)
   if (displayGidSummary && gid.isActive) {
-    const summary = await gid.getTaskSummary();
-    console.log(`\n📋 ${summary}\n`);
+    try {
+      const summary = await gid.getTaskSummary();
+      console.log(`\n📋 ${summary}\n`);
+    } catch (error) {
+      console.log(`\n📋 GID graph found but tasks could not be loaded\n`);
+    }
   }
   
   return {
