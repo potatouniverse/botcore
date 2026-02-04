@@ -1,0 +1,36 @@
+{
+  "name": "botcore",
+  "version": "0.1.0",
+  "description": "Portable AI agent core with memory, identity, skills, and task management",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "botcore": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "bot",
+    "memory",
+    "portable",
+    "engram",
+    "clawdbot"
+  ],
+  "author": "potato",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/potatouniverse/botcore.git"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {}
+}
