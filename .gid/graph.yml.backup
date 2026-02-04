@@ -9,16 +9,16 @@ nodes:
   feat-memory:
     type: Feature
     layer: domain
-    status: in_progress
+    status: draft
     priority: core
     name: "Memory System"
     description: "Engram (cognitive dynamics) + file-based logs. Hybrid memory with ACT-R activation, Hebbian learning, and consolidation."
     tasks:
-      - "[x] Design Memory class API"
-      - "[x] Integrate Engram MCP/Python client"
-      - "[x] Implement file-based log sync"
-      - "[x] Add export/import for memory.db"
-      - "[x] Write tests for recall/store"
+      - "[ ] Design Memory class API"
+      - "[ ] Integrate Engram MCP/Python client"
+      - "[ ] Implement file-based log sync"
+      - "[ ] Add export/import for memory.db"
+      - "[ ] Write tests for recall/store"
       
   feat-identity:
     type: Feature
@@ -80,7 +80,7 @@ nodes:
   comp-memory-engram:
     type: Component
     layer: infrastructure
-    status: active
+    status: draft
     priority: core
     name: "Engram Wrapper"
     description: "TypeScript wrapper for Engram Python MCP server. Handle subprocess, IPC."
@@ -88,7 +88,7 @@ nodes:
   comp-memory-files:
     type: Component
     layer: infrastructure
-    status: active
+    status: draft
     priority: supporting
     name: "File-based Memory"
     description: "Sync memory/YYYY-MM-DD.md files. Markdown parsing and generation."
@@ -136,15 +136,14 @@ nodes:
   example-basic:
     type: Component
     layer: interface
-    status: in_progress
+    status: draft
     priority: supporting
     name: "Basic Bot Example"
     description: "Minimal example showing Memory + Identity usage."
     tasks:
-      - "[x] Create example/ folder"
-      - "[x] Write memory example (examples/memory-basic.ts)"
-      - "[ ] Write simple bot using BotCore (needs Identity)"
-      - "[x] Document usage in README"
+      - "[ ] Create example/ folder"
+      - "[ ] Write simple bot using BotCore"
+      - "[ ] Document usage in README"
       
   # Docs
   doc-architecture:
@@ -220,7 +219,6 @@ edges:
     to: sdk-typescript
     relation: depends_on
   
-    
   # Cloud Sync Feature
   feat-cloud-sync:
     type: Feature
@@ -261,63 +259,6 @@ edges:
     priority: generic
     name: "Browser Extension"
     description: "Chrome/Firefox extension for cross-platform memory bar. Inject into ChatGPT, Claude, etc."
-
-edges:
-  - from: feat-memory
-    to: comp-memory-engram
-    relation: depends_on
-    
-  - from: feat-memory
-    to: comp-memory-files
-    relation: depends_on
-    
-  - from: feat-identity
-    to: comp-identity-parser
-    relation: depends_on
-    
-  - from: feat-skills
-    to: comp-skill-loader
-    relation: depends_on
-    
-  - from: feat-export
-    to: feat-memory
-    relation: depends_on
-    
-  - from: feat-export
-    to: feat-identity
-    relation: depends_on
-    
-  - from: feat-export
-    to: feat-skills
-    relation: depends_on
-    
-  - from: feat-export
-    to: feat-config
-    relation: depends_on
-    
-  - from: comp-cli
-    to: feat-export
-    relation: depends_on
-    
-  - from: sdk-typescript
-    to: feat-memory
-    relation: depends_on
-    
-  - from: sdk-typescript
-    to: feat-identity
-    relation: depends_on
-    
-  - from: sdk-typescript
-    to: feat-skills
-    relation: depends_on
-    
-  - from: sdk-typescript
-    to: feat-config
-    relation: depends_on
-    
-  - from: example-basic
-    to: sdk-typescript
-    relation: depends_on
 
   # Cloud Sync edges
   - from: feat-cloud-sync

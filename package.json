@@ -11,7 +11,9 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "jest",
-    "lint": "eslint src/**/*.ts"
+    "test:memory": "jest --testPathPattern=memory.test.ts --verbose",
+    "lint": "eslint src/**/*.ts",
+    "example:memory": "ts-node examples/memory-basic.ts"
   },
   "keywords": [
     "ai",
@@ -29,8 +31,15 @@
     "url": "https://github.com/potatouniverse/botcore.git"
   },
   "devDependencies": {
+    "@types/jest": "^29.0.0",
     "@types/node": "^20.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "ts-node": "^10.9.0",
     "typescript": "^5.0.0"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }

@@ -88,10 +88,84 @@ botcore import backups/bot-2026-02-01.tar.gz --dest ./restored-bot
 
 See [DESIGN.md](DESIGN.md) for full architecture and roadmap.
 
+## Memory Module
+
+The Memory module wraps [Engram](https://github.com/tonitangpotato/neuromemory-ai), a neuroscience-grounded memory system with ACT-R activation, Hebbian learning, and cognitive consolidation.
+
+### Requirements
+
+```bash
+pip install engramai
+```
+
+### Usage
+
+```typescript
+import { Memory } from 'botcore';
+
+// Create memory instance
+const memory = new Memory({
+  dbPath: './agent-memory.db',
+  logDir: './memory-logs',  // Optional: daily markdown logs
+  enableLogs: true,
+});
+
+// Start the Engram MCP connection
+await memory.start();
+
+// Store memories
+await memory.store('User prefers detailed explanations', {
+  type: 'relational',
+  importance: 0.8,
+});
+
+// Recall memories
+const results = await memory.recall('user preferences', { limit: 5 });
+for (const r of results) {
+  console.log(`[${r.confidenceLabel}] ${r.content}`);
+}
+
+// Session-aware recall (reduces API calls by 70-80%)
+const session = await memory.sessionRecall('user preferences', {
+  sessionId: 'chat-123',
+  limit: 5,
+});
+
+// Run consolidation (daily maintenance)
+await memory.consolidate();
+
+// Cleanup
+await memory.stop();
+```
+
+### Memory Types
+
+- `factual` — Facts and knowledge
+- `episodic` — Events and experiences
+- `relational` — Relationships and preferences
+- `emotional` — Emotional moments
+- `procedural` — How-to knowledge
+- `opinion` — Beliefs and opinions
+
+### Running Tests
+
+```bash
+# Unit tests (no MCP server needed)
+npm test
+
+# Full integration tests (requires Engram)
+# Terminal 1: Start the MCP server
+cd /path/to/engram && uv run python -m engram.mcp_server
+
+# Terminal 2: Run tests
+npm run test:memory
+```
+
 ## Development Status
 
 - [x] Design phase
-- [ ] Core modules (memory, identity, config)
+- [x] Core modules: Memory ✅
+- [ ] Core modules: Identity, Config, Skills
 - [ ] Export/Import CLI
 - [ ] TypeScript SDK
 - [ ] Platform adapters (Clawdbot, Suited Bot)
