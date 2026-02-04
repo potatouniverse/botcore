@@ -72,7 +72,12 @@ export class Gid {
    * Load GID for a workspace (lazy, no parsing)
    */
   async load(workspace: string): Promise<void> {
-    const graphPath = path.join(workspace, '.gid/graph.yml');
+    // Convert to absolute path
+    const absoluteWorkspace = path.isAbsolute(workspace) 
+      ? workspace 
+      : path.resolve(process.cwd(), workspace);
+    
+    const graphPath = path.join(absoluteWorkspace, '.gid/graph.yml');
     
     if (fs.existsSync(graphPath)) {
       this.graphPath = graphPath;

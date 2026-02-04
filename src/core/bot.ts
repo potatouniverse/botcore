@@ -9,7 +9,7 @@
  */
 
 import { Identity } from './identity';
-import { Memory, createMemory } from './memory';
+import { Memory, createMemory } from './memory-stub';  // TODO: Fix memory-mcporter
 import { Config, createConfig } from './config';
 import { Gid } from './gid';
 import { FileSystemTools, createFileSystemTools } from '../tools/filesystem';
