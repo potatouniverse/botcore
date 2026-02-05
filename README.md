@@ -14,6 +14,14 @@ BotCore separates the **essence of an AI agent** (memory, personality, skills) f
 - A "save file" for your bot
 - Portable identity + memory
 
+## 📚 Documentation
+
+- **[Architecture Guide](ARCHITECTURE.md)** - Layer comparison: Engram vs BotCore vs BotCoreBot vs Clawdbot
+- **[GID Integration](GID-INTEGRATION.md)** - Task tracking with near-zero overhead
+- **[Design Document](DESIGN.md)** - Full vision and roadmap
+
+---
+
 ## Features
 
 - 🧠 **Memory System** — Engram (cognitive dynamics) + file-based logs
