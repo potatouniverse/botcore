@@ -76,10 +76,37 @@ export async function createBot(options: CreateBotOptions): Promise<Bot> {
     ? options.memory?.logDir || `${workspace}/memory`
     : undefined;
   
-  // Try to find PYTHONPATH from environment or use default engram location
-  const pythonPath = process.env.ENGRAM_PYTHONPATH || 
-                     process.env.PYTHONPATH ||
-                     '/Users/potato/clawd/projects/agent-memory-prototype';
+  // Try to find PYTHONPATH from environment
+  // Priority: ENGRAM_PYTHONPATH > PYTHONPATH > detect installed package
+  let pythonPath = process.env.ENGRAM_PYTHONPATH || process.env.PYTHONPATH;
+  
+  // If not set, try to detect if engram is installed as a Python package
+  // (when user runs: pip install engramai)
+  // In that case, no PYTHONPATH needed - Python will find it automatically
+  if (!pythonPath) {
+    // Check if engram is importable
+    try {
+      const { execSync } = require('child_process');
+      execSync('python3 -c "import engram"', { stdio: 'ignore' });
+      // engram is installed, no PYTHONPATH needed
+      pythonPath = undefined;
+    } catch {
+      // engram not found - provide helpful error message
+      throw new Error(
+        '\n❌ Engram not found!\n\n' +
+        'BotCore requires the Engram memory system. Install it with:\n\n' +
+        '  pip install engramai\n\n' +
+        'Or install with embedding support:\n\n' +
+        '  pip install "engram-ai[sentence-transformers]"\n\n' +
+        'For development, clone and install locally:\n\n' +
+        '  git clone https://github.com/tonitangpotato/engram-ai.git\n' +
+        '  cd engram-ai\n' +
+        '  pip install -e ".[sentence-transformers]"\n\n' +
+        'Or set ENGRAM_PYTHONPATH to point to your local engram directory:\n\n' +
+        '  export ENGRAM_PYTHONPATH=/path/to/engram-ai\n'
+      );
+    }
+  }
   
   const memory = createMemory(dbPath, logDir, pythonPath);
   

@@ -94,8 +94,32 @@ The Memory module wraps [Engram](https://github.com/tonitangpotato/neuromemory-a
 
 ### Requirements
 
+**BotCore requires Engram (AI memory system) to be installed:**
+
 ```bash
+# Option 1: Install from PyPI (recommended)
 pip install engramai
+
+# Option 2: Install with semantic search support (multilingual)
+pip install "engramai[sentence-transformers]"
+
+# Option 3: Install all optional features
+pip install "engramai[all]"
+```
+
+**For development:**
+
+```bash
+# Clone and install locally
+git clone https://github.com/tonitangpotato/engramai.git
+cd engramai
+pip install -e ".[sentence-transformers]"
+```
+
+**Verify installation:**
+
+```bash
+python3 -c "import engram; print('✅ Engram installed')"
 ```
 
 ### Usage
